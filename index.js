@@ -1,6 +1,8 @@
 const axios = require('axios')
 const cheerio = require('cheerio')
+const mailer = require('./lib/mail/mailer')
 
+const mailTo = 'guqiang180@gmail.com'
 const baseURL = 'http://www.ttzmz.vip/meiju'
 const inputName = "Agents of S H I E L D"
 const season = 6
@@ -55,7 +57,7 @@ const index = async () => {
 		}
 	}).get()
 
-	console.log(seedlist[0])
+	mailer(inputName, seedlist, mailTo)
 }
 
-index()
+index().catch(console.error)
