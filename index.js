@@ -10,7 +10,6 @@ const withlogs = () => {
 			} else {
 				console.log('%s Messages sent', infos.length)
 			}
-			exit(0)
 		}).catch(console.error)	
 }
 
@@ -33,7 +32,6 @@ if (params[0]) {
 			const mail = params[1]
 			const name = params[2]
 			const season = params[3] || 1
-			console.log(`${mail}, ${name}, ${season}`)
 			utils.addListener(mail, name, season)
 				.then(x => console.log('successfully added'))
 				.catch(console.error)
