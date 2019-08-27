@@ -27,13 +27,13 @@ const seriesUpdateCheck = () => {
 const addListener = (mail, name, season) => {
 	const updateListener = listener.read({mail}).then(values => {
 		values.client.close()
-		const result = values.result
-		if (result.length > 0) {
-			const listened = result.listenTo.filter(l => l.name == name && l.season).length > 0
+		const result = values.result[0]
+		if (result) {
+			const listened = result.listenTo.filter(l => l.name == name && l.season == season).length > 0
 			if (listened) throw new Error('Already added to the listen list, no need to add again')
 			return listener.update({mail, listenTo: result.listenTo.slice().push({name, season})})
 		} else {
-			return listener.update({mail, listenTo: [name]})
+			return listener.insert({mail, listenTo: [{name, season}]})
 		}
 	}).then(values => {
 		values.client.close()
@@ -41,23 +41,20 @@ const addListener = (mail, name, season) => {
 
 	const updateSeries = series.read({name, season}).then(values => {
 		values.client.close()
-		const result = values.result
-		if (result.length === 0) {
-			return spider(name, season)
+		const result = values.result[0]
+		if (result) {
+			return Promise.resolve(result.epsoids)
 		} else {
-			Promise.resolve(result.epsoids)
+			return spider(name, season)
+				.then(obj => series.insert(obj))
+				.then(values => {
+					values.client.close()
+					return Promise.resolve(values.result.epsoids)
+				})
 		}
 	}).then(seedlist => {
-		// insert to the db
-		return series.update({
-			name,
-			season,
-			epsoids: seedlist
-		})
-	}).then(values => {
-		values.client.close()
 		// send email
-		return mailer(name, values.result.epsoids, mail)
+		return mailer(name, seedlist, mail)
 	})
 
 	return Promise.all([updateListener, updateSeries])
@@ -68,7 +65,7 @@ const dailyCheck = () => {
 }
 
 const index = async () => {
-	const result = await seriesUpdateCheck()
+	const result = await addListener('guqiang180@gmail.com', 'Agents of S H I E L D', 6)
 	console.log(result)
 }
 
