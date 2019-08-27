@@ -1,72 +1,44 @@
-const mailer = require('./lib/mail/mailer')
-const series = require('./lib/mongod/series')
-const listener = require('./lib/mongod/listeners')
-const spider = require('./lib/ttmj_spider')
+const utils = require('./core/utils')
+const checkAndNotify = require('./core/daily')
+var schedule = require('node-schedule')
 
-const seriesUpdateCheck = () => {
-	return series.read().then(values => {
-		values.client.close()
-		const jobs = values.result.map(record => {
-			return spider(record.name, record.season)
-				.then(fetched => {
-					const newEposids = fetched.epsoids.filter(e => record.epsoids.find(re => re.fileName === e.fileName) === 0)
-					const updatedRecrod = {
-						original: record,
-						newEposids
-					}
-					console.log(updatedRecrod)
-					return Promise.resolve(fetched.epsoids.length == record.epsoids.length ? updatedRecrod : null)
-				})
-		})
-		return Promise.all(jobs).then(records => {
-			return Promise.resolve(records.filter(a => a !== null))			
-		})
-	})
+const withlogs = () => {
+	checkAndNotify()
+		.then(infos => {
+			if (infos.length < 1) {
+				console.log('no updates')
+			} else {
+				console.log('%s Messages sent', infos.length)
+			}
+			exit(0)
+		}).catch(console.error)	
 }
 
-const addListener = (mail, name, season) => {
-	const updateListener = listener.read({mail}).then(values => {
-		values.client.close()
-		const result = values.result[0]
-		if (result) {
-			const listened = result.listenTo.filter(l => l.name == name && l.season == season).length > 0
-			if (listened) throw new Error('Already added to the listen list, no need to add again')
-			return listener.update({mail, listenTo: result.listenTo.slice().push({name, season})})
-		} else {
-			return listener.insert({mail, listenTo: [{name, season}]})
-		}
-	}).then(values => {
-		values.client.close()
-	})
-
-	const updateSeries = series.read({name, season}).then(values => {
-		values.client.close()
-		const result = values.result[0]
-		if (result) {
-			return Promise.resolve(result.epsoids)
-		} else {
-			return spider(name, season)
-				.then(obj => series.insert(obj))
-				.then(values => {
-					values.client.close()
-					return Promise.resolve(values.result.epsoids)
-				})
-		}
-	}).then(seedlist => {
-		// send email
-		return mailer(name, seedlist, mail)
-	})
-
-	return Promise.all([updateListener, updateSeries])
-}
-
+// run at 9am everyday
 const dailyCheck = () => {
-
+	var j = schedule.scheduleJob('0 0 9 * * *', withlogs)
 }
 
-const index = async () => {
-	const result = await addListener('guqiang180@gmail.com', 'Agents of S H I E L D', 6)
-	console.log(result)
-}
+const params = process.argv.slice(2)
 
-index().catch(console.error)
+if (params[0]) {
+	switch(params[0]) {
+		case 'startCron':
+			dailyCheck()
+			break
+		case 'startOnce':
+			withlogs()
+			break
+		case 'addListener':
+			const mail = params[1]
+			const name = params[2]
+			const season = params[3] || 1
+			console.log(`${mail}, ${name}, ${season}`)
+			utils.addListener(mail, name, season)
+				.then(x => console.log('successfully added'))
+				.catch(console.error)
+			break
+	}
+} else {
+	withlogs()
+}
